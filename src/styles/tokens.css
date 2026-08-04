@@ -1,0 +1,104 @@
+/*
+ * Design tokens — Jaque Tracker
+ *
+ * Transcripción literal de la hoja "Tokens" de la maqueta de Claude Design
+ * ("Decisiones de diseño en app de salud" / Jaque Tracker.dc.html).
+ * Esa hoja es la fuente de verdad visual: si un valor cambia allá, se cambia acá.
+ *
+ * Cada token existe en dos versiones. La de abajo (:root) es la clara; el bloque
+ * prefers-color-scheme: dark la pisa con la oscura. Como los componentes usan
+ * siempre var(--...), el modo oscuro sale sin escribir una sola clase extra.
+ * El interruptor manual de tema es de la fase 7 (RNF-02); por ahora seguimos al
+ * sistema operativo.
+ */
+
+:root {
+  color-scheme: light dark;
+
+  /* Paleta · claro */
+  --bg: #f6f3ee;
+  --surface: #fefcf8;
+  --surface-2: #f1efe7;
+  --border: #e2dcd2;
+  --border-strong: #c9c2b6;
+  --hairline: #e7e2d9;
+  --text: #2a2724;
+  --text-2: #6b655d;
+  --accent: #3d6b60;
+  --on-accent: #fefcf8;
+  --danger: #9e4a3e;
+
+  /* Sombras */
+  --shadow-1: 0 1px 2px rgba(42, 39, 36, 0.04);
+  --shadow-2: 0 6px 18px rgba(61, 107, 96, 0.22);
+
+  /* Intensidad 1–10 · rampa secuencial ámbar → terracota.
+     Un solo tono girando, con luminosidad estrictamente decreciente: se lee
+     igual en escala de grises y con daltonismo. El número siempre acompaña
+     al color, nunca se usa el color solo. */
+  --intensity-1: #fbf0dc;
+  --intensity-2: #f7e2be;
+  --intensity-3: #f2d09b;
+  --intensity-4: #edbb77;
+  --intensity-5: #e5a257;
+  --intensity-6: #d9863f;
+  --intensity-7: #c56a33;
+  --intensity-8: #ac522c;
+  --intensity-9: #8c3f27;
+  --intensity-10: #6b2e21;
+
+  --intensity-1-on: #4a3218;
+  --intensity-2-on: #4a3218;
+  --intensity-3-on: #4a3218;
+  --intensity-4-on: #4a3218;
+  --intensity-5-on: #40260f;
+  --intensity-6-on: #fff8ee;
+  --intensity-7-on: #fff8ee;
+  --intensity-8-on: #fff8ee;
+  --intensity-9-on: #fff8ee;
+  --intensity-10-on: #fff8ee;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    /* Paleta · oscuro */
+    --bg: #0e100f;
+    --surface: #171a19;
+    --surface-2: #1f2322;
+    --border: #2e3331;
+    --border-strong: #3a4442;
+    --hairline: #1d2120;
+    --text: #e8e4dc;
+    --text-2: #9a968e;
+    --accent: #7fbdae;
+    --on-accent: #10201c;
+    --danger: #e08578;
+
+    /* En oscuro la jerarquía la dan los bordes, no las sombras. */
+    --shadow-1: none;
+    --shadow-2: none;
+
+    /* Misma rampa, luminosidad creciente en vez de decreciente. */
+    --intensity-1: #3e3a2e;
+    --intensity-2: #4e4531;
+    --intensity-3: #625234;
+    --intensity-4: #766036;
+    --intensity-5: #8a6c37;
+    --intensity-6: #9c7038;
+    --intensity-7: #a9673a;
+    --intensity-8: #b25c3d;
+    --intensity-9: #b4503f;
+    --intensity-10: #ae4740;
+
+    --intensity-1-on: #e8e4dc;
+    --intensity-2-on: #e8e4dc;
+    --intensity-3-on: #f3e7d8;
+    --intensity-4-on: #f3e7d8;
+    --intensity-5-on: #f3e7d8;
+    --intensity-6-on: #1c1508;
+    --intensity-7-on: #f3e7d8;
+    --intensity-8-on: #f3e7d8;
+    --intensity-9-on: #f3e7d8;
+    --intensity-10-on: #f3e7d8;
+  }
+}

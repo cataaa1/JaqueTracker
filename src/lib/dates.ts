@@ -49,15 +49,21 @@ export function localDayKey(date: Date): string {
  * Un episodio que empieza a las 23:30 y termina a las 01:00 cuenta como dos
  * días, que es como lo cuenta la clínica.
  *
- * `endedAt` en `null` (episodio en curso) se toma como "hasta ahora".
+ * `endedAt` en `null` significa "no se registró cuándo terminó", y cuenta un
+ * solo día: el de inicio.
+ *
+ * OJO, ACÁ HUBO UN ERROR CARO: antes `null` se interpretaba como "sigue en
+ * curso" y se contaba hasta el día de hoy. Mientras existía el episodio en
+ * curso eso era correcto. Cuando se sacó del formulario la pregunta "¿ya se te
+ * pasó?", todos los episodios pasaron a tener `endedAt` en null y un episodio
+ * de hace 79 días sumaba 79 días con cefalea. La métrica principal del producto
+ * quedaba inflada tres veces.
  */
-export function localDayKeysTouched(
-  startedAt: string,
-  endedAt: string | null,
-  now: Date = new Date(),
-): string[] {
+export function localDayKeysTouched(startedAt: string, endedAt: string | null): string[] {
   const start = parseISO(startedAt);
-  const end = endedAt === null ? now : parseISO(endedAt);
+  if (endedAt === null) return [localDayKey(start)];
+
+  const end = parseISO(endedAt);
 
   // Un `endedAt` anterior al `startedAt` sería un dato corrupto; no explotamos
   // por eso, devolvemos al menos el día de inicio.

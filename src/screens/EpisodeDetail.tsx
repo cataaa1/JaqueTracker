@@ -142,11 +142,14 @@ export function EpisodeDetail({
                 <span className="text-[20px] font-semibold text-text">
                   {formatEpisodeLong(episode.startedAt)}
                 </span>
-                <span className="text-body text-text-2">
-                  {episode.endedAt === null
-                    ? 'En curso'
-                    : `Duró ${formatDuration(episode.startedAt, episode.endedAt)}`}
-                </span>
+                {/* La duración solo se muestra si el episodio la tiene. Desde
+                    que se sacó "¿ya se te pasó?" del formulario los nuevos ya no
+                    la registran; los viejos la conservan. */}
+                {episode.endedAt !== null && (
+                  <span className="text-body text-text-2">
+                    Duró {formatDuration(episode.startedAt, episode.endedAt)}
+                  </span>
+                )}
               </div>
             </div>
 
@@ -171,11 +174,15 @@ export function EpisodeDetail({
                     : '—'
                 }
               />
-              <DetailField
-                label="Dónde"
-                value={episode.location === null ? '—' : LOCATION_LABELS[episode.location]}
-              />
-              <DetailField label="Limitación" value={DISABILITY_LABELS[episode.disability]} />
+              {/* Dónde y Limitación ya no se piden en el formulario. Se
+                  muestran solo si el episodio los tiene cargados, o sea si es
+                  anterior al cambio: en los nuevos serían filas siempre vacías. */}
+              {episode.location !== null && (
+                <DetailField label="Dónde" value={LOCATION_LABELS[episode.location]} />
+              )}
+              {episode.disability !== 0 && (
+                <DetailField label="Limitación" value={DISABILITY_LABELS[episode.disability]} />
+              )}
               <DetailField label="Notas" value={episode.notes === '' ? '—' : episode.notes} isLast />
             </dl>
 

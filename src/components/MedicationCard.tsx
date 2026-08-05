@@ -22,20 +22,16 @@ interface Props {
   medications: Medication[];
   todayIntakes: Intake[];
   awaitingRelief: Intake[];
-  hasRescueMedications: boolean;
   onRegisterIntake: () => void;
   onAnswerRelief: (intakeId: string, relief: ReliefLevel) => void;
-  onAddMedication: () => void;
 }
 
 export function MedicationCard({
   medications,
   todayIntakes,
   awaitingRelief,
-  hasRescueMedications,
   onRegisterIntake,
   onAnswerRelief,
-  onAddMedication,
 }: Props) {
   function label(intake: Intake): string {
     const medication = findMedication(medications, intake.medicationId);
@@ -81,23 +77,15 @@ export function MedicationCard({
         </ul>
       )}
 
-      {hasRescueMedications ? (
-        <button
-          type="button"
-          onClick={onRegisterIntake}
-          className="mt-1 flex min-h-target items-center justify-center rounded-btn border border-border-strong"
-        >
-          <span className="text-[17px] font-semibold text-accent">Registrar una toma</span>
-        </button>
-      ) : (
-        <button
-          type="button"
-          onClick={onAddMedication}
-          className="mt-1 flex min-h-target items-center justify-center rounded-btn border border-border-strong px-3"
-        >
-          <span className="text-[17px] font-semibold text-accent">Cargar un analgésico</span>
-        </button>
-      )}
+      {/* Cargar medicamentos se hace desde Ajustes. Acá solo se registra una
+          toma de lo que ya está cargado. */}
+      <button
+        type="button"
+        onClick={onRegisterIntake}
+        className="mt-1 flex min-h-target items-center justify-center rounded-btn border border-border-strong"
+      >
+        <span className="text-[17px] font-semibold text-accent">Registrar una toma</span>
+      </button>
     </section>
   );
 }

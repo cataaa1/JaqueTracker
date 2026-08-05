@@ -9,13 +9,18 @@
  * es la hora de inicio —que ya viene puesta— y la intensidad (RF-10); el botón
  * de abajo lo dice con todas las letras mientras falte elegirla.
  *
- * Dos campos no están en la maqueta y los mantengo a propósito:
- *   · "¿Ya se te pasó?" — sin eso todo episodio nuevo nacería en curso y no
- *     habría forma de registrar un dolor de ayer que ya terminó sin ponerle una
- *     hora de fin falsa (RF-08).
- *   · "¿Dónde te dolía?" — está en el modelo de datos del PRD (§5). Ojo: no
- *     aparece en la especificación del reporte (§8), así que hoy es un campo
- *     que se guarda y no se usa en ningún lado.
+ * TRES CAMPOS SIN CONTROL, POR DECISIÓN DEL PROPIETARIO DEL PRODUCTO
+ *
+ * `endedAt`, `location` y `disability` siguen en el modelo de datos y en la
+ * base, pero ya no se piden en pantalla. Eso deja fuera RF-07 (discapacidad) y
+ * RF-08 (cerrar el episodio), y con ellos dos items de la especificación del
+ * reporte: la duración de los episodios y los días con discapacidad grado 2 o 3.
+ *
+ * Los valores YA GUARDADOS se conservan tal cual al editar: el formulario los
+ * lee y los vuelve a escribir sin tocarlos. Editar un episodio viejo no le borra
+ * la discapacidad que tenía cargada. Si algún día se decide volver atrás,
+ * alcanza con reponer los controles: no hay datos perdidos ni migración que
+ * hacer.
  */
 
 import { useCallback, useEffect, useState } from 'react';
@@ -40,12 +45,8 @@ import {
 import {
   AURA_TYPE_LABELS,
   AURA_TYPE_ORDER,
-  DISABILITY_LABELS,
-  DISABILITY_ORDER,
   EPISODE_TYPE_LABELS,
   EPISODE_TYPE_ORDER,
-  LOCATION_LABELS,
-  LOCATION_ORDER,
   SYMPTOM_LABELS,
   SYMPTOM_ORDER,
 } from '../lib/labels';
@@ -77,17 +78,19 @@ export function EpisodeForm({ episodeId, onCancel, onSaved, onRequestDelete }: P
   const { state } = useDbData(load);
 
   const [startedAt, setStartedAt] = useState(() => isoToDateTimeLocalInput(nowIso()));
-  const [stillOngoing, setStillOngoing] = useState(true);
-  const [endedAt, setEndedAt] = useState(() => isoToDateTimeLocalInput(nowIso()));
   const [intensity, setIntensity] = useState<Intensity | null>(null);
   const [type, setType] = useState<EpisodeType>('unknown');
   const [hasAura, setHasAura] = useState(false);
   const [auraTypes, setAuraTypes] = useState<AuraType[]>([]);
   const [symptoms, setSymptoms] = useState<Symptom[]>([]);
-  const [disability, setDisability] = useState<Disability>(0);
-  const [location, setLocation] = useState<EpisodeLocation | null>(null);
   const [notes, setNotes] = useState('');
   const [notesOpen, setNotesOpen] = useState(false);
+
+  // Sin control en pantalla: se arrastran tal como estaban guardados. Ver el
+  // comentario del encabezado del archivo.
+  const [endedAt, setEndedAt] = useState<string | null>(null);
+  const [location, setLocation] = useState<EpisodeLocation | null>(null);
+  const [disability, setDisability] = useState<Disability>(0);
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -97,25 +100,20 @@ export function EpisodeForm({ episodeId, onCancel, onSaved, onRequestDelete }: P
     if (state.status !== 'ready' || state.data === undefined) return;
     const episode = state.data;
     setStartedAt(isoToDateTimeLocalInput(episode.startedAt));
-    setStillOngoing(episode.endedAt === null);
-    if (episode.endedAt !== null) setEndedAt(isoToDateTimeLocalInput(episode.endedAt));
     setIntensity(episode.intensity);
     setType(episode.type);
     setHasAura(episode.hasAura);
     setAuraTypes(episode.auraTypes);
     setSymptoms(episode.symptoms);
-    setDisability(episode.disability);
-    setLocation(episode.location);
     setNotes(episode.notes);
     setNotesOpen(episode.notes !== '');
+    setEndedAt(episode.endedAt);
+    setLocation(episode.location);
+    setDisability(episode.disability);
   }, [state]);
 
   const startedAtIsValid = isValidDateTimeLocalInput(startedAt);
-  const endedAtIsValid = stillOngoing || isValidDateTimeLocalInput(endedAt);
-  const endedAfterStart =
-    stillOngoing || !startedAtIsValid || !endedAtIsValid || endedAt >= startedAt;
-  const canSave =
-    startedAtIsValid && endedAtIsValid && endedAfterStart && intensity !== null && !saving;
+  const canSave = startedAtIsValid && intensity !== null && !saving;
 
   async function handleSave() {
     if (intensity === null || !canSave) return;
@@ -125,7 +123,7 @@ export function EpisodeForm({ episodeId, onCancel, onSaved, onRequestDelete }: P
 
     const data: NewEpisode = {
       startedAt: dateTimeLocalInputToIso(startedAt),
-      endedAt: stillOngoing ? null : dateTimeLocalInputToIso(endedAt),
+      endedAt,
       type,
       intensity,
       location,
@@ -194,31 +192,6 @@ export function EpisodeForm({ episodeId, onCancel, onSaved, onRequestDelete }: P
           />
         </Group>
 
-        <Group label="¿Ya se te pasó?">
-          <div className="grid grid-cols-2 gap-2">
-            <OptionButton selected={!stillOngoing} onClick={() => setStillOngoing(false)}>
-              Sí, ya pasó
-            </OptionButton>
-            <OptionButton selected={stillOngoing} onClick={() => setStillOngoing(true)}>
-              Sigue
-            </OptionButton>
-          </div>
-          {!stillOngoing && (
-            <input
-              type="datetime-local"
-              value={endedAt}
-              onChange={(event) => setEndedAt(event.target.value)}
-              className={INPUT_CLASS}
-              aria-label="Fecha y hora de fin"
-            />
-          )}
-          {!endedAfterStart && (
-            <p className="text-body text-danger">
-              La hora de fin no puede ser anterior a la de inicio.
-            </p>
-          )}
-        </Group>
-
         <Group label="Intensidad">
           <IntensityPicker value={intensity} onChange={setIntensity} />
         </Group>
@@ -274,35 +247,6 @@ export function EpisodeForm({ episodeId, onCancel, onSaved, onRequestDelete }: P
                 onClick={() => setSymptoms(toggleInList(symptoms, option))}
               >
                 {SYMPTOM_LABELS[option]}
-              </OptionButton>
-            ))}
-          </div>
-        </Group>
-
-        <Group label="¿Cuánto te limitó?">
-          <div className="flex flex-col gap-2">
-            {DISABILITY_ORDER.map((option) => (
-              <OptionButton
-                key={option}
-                variant="row"
-                selected={disability === option}
-                onClick={() => setDisability(option)}
-              >
-                {DISABILITY_LABELS[option]}
-              </OptionButton>
-            ))}
-          </div>
-        </Group>
-
-        <Group label="¿Dónde te dolía?">
-          <div className="grid grid-cols-2 gap-2">
-            {LOCATION_ORDER.map((option) => (
-              <OptionButton
-                key={option}
-                selected={location === option}
-                onClick={() => setLocation(location === option ? null : option)}
-              >
-                {LOCATION_LABELS[option]}
               </OptionButton>
             ))}
           </div>

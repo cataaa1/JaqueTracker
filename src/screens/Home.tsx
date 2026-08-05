@@ -20,12 +20,10 @@ import type { ReactNode } from 'react';
 import { endOfMonth, startOfMonth, subDays, subMonths } from 'date-fns';
 import type { Episode, Intake, Medication, PreventiveLog, ReliefLevel } from '../types';
 import {
-  closeEpisode,
   countEpisodes,
   listActiveMedications,
   listEpisodesStartedBetween,
   listIntakesTakenBetween,
-  listOngoingEpisodes,
   listPreventiveLogsBetween,
   listRecentEpisodes,
   setIntakeRelief,
@@ -34,7 +32,7 @@ import {
 import {
   countEpisodesInMonth,
   countHeadacheDaysInMonth,
-  findOngoingEpisode,
+  findEpisodeForQuickIntake,
 } from '../lib/episodes';
 import {
   countRescueDaysInMonth,
@@ -43,12 +41,12 @@ import {
   isPreventiveTaken,
   rescueDaysWarning,
 } from '../lib/medications';
-import { formatMonthName, formatTodayHeader, localDayKey, nowIso } from '../lib/dates';
+import { formatMonthName, formatTodayHeader, localDayKey } from '../lib/dates';
 import { useDbData } from '../hooks/useDbData';
 import { EpisodeRow } from '../components/EpisodeRow';
 import { MedicationCard } from '../components/MedicationCard';
-import { OngoingEpisodeCard } from '../components/OngoingEpisodeCard';
 import { PreventiveRow } from '../components/PreventiveRow';
+import { RecentEpisodeCard } from '../components/RecentEpisodeCard';
 
 interface HomeData {
   recent: Episode[];
@@ -57,7 +55,8 @@ interface HomeData {
   episodesThisMonth: number;
   rescueDays: number;
   totalEpisodes: number;
-  ongoing: Episode | null;
+  /** La cefalea de la última hora, para engancharle una toma. */
+  quickIntakeEpisode: Episode | null;
   medications: Medication[];
   monthIntakes: Intake[];
   todayIntakes: Intake[];
@@ -78,7 +77,6 @@ async function loadHomeData(): Promise<HomeData> {
     recent,
     monthWindow,
     totalEpisodes,
-    ongoingList,
     medications,
     monthIntakes,
     recentIntakes,
@@ -87,7 +85,6 @@ async function loadHomeData(): Promise<HomeData> {
     listRecentEpisodes(3),
     listEpisodesStartedBetween(episodesFrom, monthTo),
     countEpisodes(),
-    listOngoingEpisodes(),
     listActiveMedications(),
     listIntakesTakenBetween(monthFrom, monthTo),
     // Tres días alcanzan para las tomas de hoy y para las que esperan respuesta
@@ -99,11 +96,13 @@ async function loadHomeData(): Promise<HomeData> {
   return {
     recent,
     recentIntakes,
-    headacheDays: countHeadacheDaysInMonth(monthWindow, now, now),
+    headacheDays: countHeadacheDaysInMonth(monthWindow, now),
     episodesThisMonth: countEpisodesInMonth(monthWindow, now),
     rescueDays: countRescueDaysInMonth(monthIntakes, medications, now),
     totalEpisodes,
-    ongoing: findOngoingEpisode(ongoingList),
+    // `recent` ya trae los tres últimos: alcanza para saber si hay uno de la
+    // última hora, sin pedirle nada más a la base.
+    quickIntakeEpisode: findEpisodeForQuickIntake(recent, now),
     medications,
     monthIntakes,
     todayIntakes: intakesOnDay(recentIntakes, now),
@@ -161,7 +160,12 @@ export function Home({
   const preventives = data.medications.filter((m) => m.kind === 'preventive');
   const hasRescue = data.medications.some((m) => m.kind === 'rescue');
   const warning = rescueDaysWarning(data.rescueDays);
-  const ongoing = data.ongoing;
+  const quickEpisode = data.quickIntakeEpisode;
+
+  // La invitación a cargar medicación aparece una sola vez, cuando no hay
+  // ninguna. Con algo cargado, los medicamentos se administran desde Ajustes y
+  // Inicio deja de ofrecer atajos para darlos de alta.
+  const hasAnyMedication = data.medications.length > 0;
 
   return (
     <div className="flex h-full flex-col">
@@ -180,16 +184,11 @@ export function Home({
           </p>
         )}
 
-        {ongoing !== null && (
-          <OngoingEpisodeCard
-            episode={ongoing}
-            onClose={() =>
-              void runAction(
-                () => closeEpisode(ongoing.id, nowIso()),
-                'No se pudo cerrar el episodio.',
-              )
-            }
-            onRegisterIntake={() => onRegisterIntake(ongoing.id)}
+        {quickEpisode !== null && (
+          <RecentEpisodeCard
+            episode={quickEpisode}
+            onRegisterIntake={() => onRegisterIntake(quickEpisode.id)}
+            onOpenDetail={() => onSelectEpisode(quickEpisode.id)}
           />
         )}
 
@@ -254,22 +253,25 @@ export function Home({
           </section>
         )}
 
-        <section className="flex flex-col gap-2.5">
-          <h2 className="text-body font-semibold text-text">Preventivo de hoy</h2>
-          {preventives.length === 0 ? (
-            <div className="flex min-h-[76px] items-center gap-3.5 rounded-row border border-dashed border-border-strong bg-surface-2 p-4">
-              <p className="flex-1 text-body text-text-2" style={{ textWrap: 'pretty' }}>
-                Si tomás algún preventivo a diario, cargalo para llevar la cuenta.
-              </p>
-              <button
-                type="button"
-                onClick={onAddMedication}
-                className="h-12 min-w-[96px] rounded-btn border border-accent px-3.5 text-[17px] font-semibold text-accent"
-              >
-                Cargar
-              </button>
-            </div>
-          ) : (
+        {!hasAnyMedication && (
+          <section className="flex min-h-[76px] items-center gap-3.5 rounded-row border border-dashed border-border-strong bg-surface-2 p-4">
+            <p className="flex-1 text-body text-text-2" style={{ textWrap: 'pretty' }}>
+              Cargá los analgésicos que tomás y, si tomás alguno todos los días,
+              también.
+            </p>
+            <button
+              type="button"
+              onClick={onAddMedication}
+              className="h-12 min-w-[96px] rounded-btn border border-accent px-3.5 text-[17px] font-semibold text-accent"
+            >
+              Cargar
+            </button>
+          </section>
+        )}
+
+        {preventives.length > 0 && (
+          <section className="flex flex-col gap-2.5">
+            <h2 className="text-body font-semibold text-text">Preventivo de hoy</h2>
             <>
               {preventives.map((medication) => {
                 const taken = isPreventiveTaken(data.preventiveLogs, medication.id, today);
@@ -295,17 +297,15 @@ export function Home({
                 Marcar días anteriores
               </button>
             </>
-          )}
-        </section>
+          </section>
+        )}
 
         {(hasRescue || data.todayIntakes.length > 0) && (
           <MedicationCard
             medications={data.medications}
             todayIntakes={data.todayIntakes}
             awaitingRelief={data.awaitingRelief}
-            hasRescueMedications={hasRescue}
-            onRegisterIntake={() => onRegisterIntake(ongoing?.id ?? null)}
-            onAddMedication={onAddMedication}
+            onRegisterIntake={() => onRegisterIntake(quickEpisode?.id ?? null)}
             onAnswerRelief={(intakeId, relief: ReliefLevel) =>
               void runAction(
                 () => setIntakeRelief(intakeId, relief),
@@ -335,30 +335,31 @@ export function Home({
       </div>
 
       {/* RF-01: la acción principal está siempre visible, fuera del scroll.
-          Con un episodio abierto pierde el relleno y baja de jerarquía: lo que
-          se espera en ese momento es cerrarlo, no abrir otro. */}
+          Con una cefalea recién registrada pierde el relleno y baja de
+          jerarquía: lo que se espera en ese momento es anotar una toma, no
+          registrar otra cefalea. */}
       <div className="flex-none border-t border-border bg-bg px-5 pb-3.5 pt-3">
         <button
           type="button"
           onClick={onRegisterEpisode}
           className={[
             'flex h-[66px] w-full items-center justify-center gap-3 rounded-card',
-            ongoing === null ? 'bg-accent shadow-2' : 'border border-border bg-surface',
+            quickEpisode === null ? 'bg-accent shadow-2' : 'border border-border bg-surface',
           ].join(' ')}
         >
           <svg width="22" height="22" viewBox="0 0 22 22" fill="none" aria-hidden="true">
             <path
               d="M11 4v14M4 11h14"
-              stroke={ongoing === null ? 'var(--on-accent)' : 'var(--text-2)'}
+              stroke={quickEpisode === null ? 'var(--on-accent)' : 'var(--text-2)'}
               strokeWidth="2.4"
               strokeLinecap="round"
             />
           </svg>
           <span
             className="text-[21px] font-semibold"
-            style={{ color: ongoing === null ? 'var(--on-accent)' : 'var(--text-2)' }}
+            style={{ color: quickEpisode === null ? 'var(--on-accent)' : 'var(--text-2)' }}
           >
-            {ongoing === null ? 'Registrar episodio' : 'Registrar otro episodio'}
+            {quickEpisode === null ? 'Registrar episodio' : 'Registrar otro episodio'}
           </span>
         </button>
       </div>

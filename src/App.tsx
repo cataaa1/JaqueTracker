@@ -21,7 +21,6 @@ import { useState } from 'react';
 import type { ReactNode } from 'react';
 import type { TabId } from './components/TabBar';
 import { TabBar } from './components/TabBar';
-import { ComingSoon } from './screens/ComingSoon';
 import { EpisodeDetail } from './screens/EpisodeDetail';
 import { EpisodeForm } from './screens/EpisodeForm';
 import { History } from './screens/History';
@@ -30,6 +29,7 @@ import { MedicationForm } from './screens/MedicationForm';
 import { Medications } from './screens/Medications';
 import { NewIntake } from './screens/NewIntake';
 import { PreventiveHistory } from './screens/PreventiveHistory';
+import { Report } from './screens/Report';
 import { Settings } from './screens/Settings';
 
 type View =
@@ -170,12 +170,7 @@ export function App() {
         {tab === 'history' && (
           <History onSelectEpisode={(episodeId) => openEpisode(episodeId, 'history')} />
         )}
-        {tab === 'report' && (
-          <ComingSoon
-            title="Reporte"
-            description="Acá va a estar el PDF de dos páginas para llevarle al neurólogo, con el período que elijas. Llega en la fase 5."
-          />
-        )}
+        {tab === 'report' && <Report />}
         {tab === 'settings' && <Settings onOpenMedications={() => setView({ kind: 'medications' })} />}
       </main>
       <TabBar active={tab} onChange={setTab} />

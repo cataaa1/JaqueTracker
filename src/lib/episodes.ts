@@ -7,18 +7,33 @@
  * pantalla de Inicio necesita para mostrar el mes en curso.
  */
 
-import { endOfMonth, startOfMonth } from 'date-fns';
+import { endOfMonth, startOfMonth, subMinutes } from 'date-fns';
 import type { Episode } from '../types';
 import { localDayKey, localDayKeysTouched } from './dates';
 
-/** El episodio que todavía no terminó, si hay alguno (RF-08). Si por algún
- *  motivo hubiera más de uno, gana el más reciente. */
-export function findOngoingEpisode(episodes: Episode[]): Episode | null {
-  const ongoing = episodes
-    .filter((episode) => episode.endedAt === null)
+/** Cuánto tiempo queda a mano en Inicio la última cefalea registrada. */
+const QUICK_INTAKE_WINDOW_MINUTES = 60;
+
+/**
+ * El episodio que Inicio deja a mano para engancharle una toma: el más reciente,
+ * siempre que haya empezado dentro de la última hora.
+ *
+ * Es un atajo, no un estado. La app no tiene "episodios abiertos" que haya que
+ * cerrar: pasada la hora, el episodio simplemente deja de estar destacado y se
+ * lo encuentra en el historial como cualquier otro.
+ */
+export function findEpisodeForQuickIntake(
+  episodes: Episode[],
+  now: Date = new Date(),
+): Episode | null {
+  const from = subMinutes(now, QUICK_INTAKE_WINDOW_MINUTES).toISOString();
+  const to = now.toISOString();
+
+  const candidates = episodes
+    .filter((episode) => episode.startedAt >= from && episode.startedAt <= to)
     .sort((a, b) => b.startedAt.localeCompare(a.startedAt));
 
-  return ongoing[0] ?? null;
+  return candidates[0] ?? null;
 }
 
 /**
@@ -31,14 +46,13 @@ export function findOngoingEpisode(episodes: Episode[]): Episode | null {
 export function countHeadacheDaysInMonth(
   episodes: Episode[],
   reference: Date = new Date(),
-  now: Date = new Date(),
 ): number {
   const firstDay = localDayKey(startOfMonth(reference));
   const lastDay = localDayKey(endOfMonth(reference));
 
   const days = new Set<string>();
   for (const episode of episodes) {
-    for (const day of localDayKeysTouched(episode.startedAt, episode.endedAt, now)) {
+    for (const day of localDayKeysTouched(episode.startedAt, episode.endedAt)) {
       if (day >= firstDay && day <= lastDay) days.add(day);
     }
   }

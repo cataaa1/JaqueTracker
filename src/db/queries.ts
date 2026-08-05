@@ -44,14 +44,20 @@ export async function listEpisodesStartedBetween(
   return db.episodes.where('startedAt').between(fromIso, toIso, true, true).toArray();
 }
 
-/**
- * Los episodios sin cerrar (RF-08).
- *
- * Se recorre en memoria a propósito: IndexedDB no puede indexar `null`, que es
- * justo el valor que marca "en curso". Ver el comentario en schema.ts.
- */
-export async function listOngoingEpisodes(): Promise<Episode[]> {
-  return db.episodes.filter((episode) => episode.endedAt === null).toArray();
+// ─── Lecturas completas, para el reporte y el respaldo ───────────────────────
+// Traen todo sin filtrar. Solo las usan el reporte (RF-23) y, más adelante, la
+// exportación: en el uso diario nunca se pide la base entera.
+
+export async function listAllEpisodes(): Promise<Episode[]> {
+  return db.episodes.orderBy('startedAt').toArray();
+}
+
+export async function listAllIntakes(): Promise<Intake[]> {
+  return db.intakes.orderBy('takenAt').toArray();
+}
+
+export async function listAllPreventiveLogs(): Promise<PreventiveLog[]> {
+  return db.preventiveLogs.orderBy('date').toArray();
 }
 
 /** Cantidad total de episodios guardados. Sirve para distinguir "todavía no hay
@@ -65,14 +71,6 @@ export async function createEpisode(episode: NewEpisode): Promise<string> {
   const id = newId();
   await db.episodes.add({ ...episode, id });
   return id;
-}
-
-/** Cierra un episodio en curso poniéndole hora de fin (RF-08). */
-export async function closeEpisode(id: string, endedAt: string): Promise<void> {
-  const updated = await db.episodes.update(id, { endedAt });
-  if (updated === 0) {
-    throw new Error(`No se encontró el episodio ${id} para cerrarlo.`);
-  }
 }
 
 /** Un episodio por su id, para el detalle y la edición (RF-15). */

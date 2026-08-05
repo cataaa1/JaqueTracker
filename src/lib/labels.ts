@@ -33,14 +33,6 @@ export const LOCATION_LABELS: Record<EpisodeLocation, string> = {
   other: 'Otra',
 };
 
-export const LOCATION_ORDER: EpisodeLocation[] = [
-  'unilateral',
-  'bilateral',
-  'nuchal',
-  'periocular',
-  'other',
-];
-
 export const AURA_TYPE_LABELS: Record<AuraType, string> = {
   visual: 'Visual',
   sensory: 'Sensitiva',
@@ -59,6 +51,23 @@ export const SYMPTOM_LABELS: Record<Symptom, string> = {
   neckStiffness: 'Rigidez en el cuello',
 };
 
+/**
+ * Los mismos síntomas, en el vocabulario clínico del PRD §8.
+ *
+ * La pantalla la lee el paciente y dice "molestia con la luz". El PDF lo lee el
+ * neurólogo y dice "fotofobia", que es el término que el propio PRD usa al
+ * especificar el reporte. No es jerga por gusto: es el idioma del destinatario,
+ * y de paso hace entrar la tabla del bloque 5 a lo ancho de una A4.
+ */
+export const SYMPTOM_CLINICAL_LABELS: Record<Symptom, string> = {
+  nausea: 'Náuseas',
+  vomiting: 'Vómitos',
+  dizziness: 'Mareos',
+  photophobia: 'Fotofobia',
+  phonophobia: 'Fonofobia',
+  neckStiffness: 'Rigidez de cuello',
+};
+
 export const SYMPTOM_ORDER: Symptom[] = [
   'nausea',
   'vomiting',
@@ -68,16 +77,20 @@ export const SYMPTOM_ORDER: Symptom[] = [
   'neckStiffness',
 ];
 
-/** Grado de discapacidad funcional (RF-07). Los textos describen el impacto en
- *  el día, sin interpretar nada: la app no diagnostica (CLAUDE.md §4.8). */
+/**
+ * Grado de discapacidad funcional. Los textos describen el impacto en el día,
+ * sin interpretar nada: la app no diagnostica (CLAUDE.md §4.8).
+ *
+ * El formulario ya no pide este campo (RF-07 quedó fuera por decisión del
+ * propietario del producto), pero las etiquetas siguen acá porque los episodios
+ * registrados antes del cambio sí lo tienen cargado y hay que poder mostrarlo.
+ */
 export const DISABILITY_LABELS: Record<Disability, string> = {
   0: 'No me afectó',
   1: 'Me molestó',
   2: 'Me limitó',
   3: 'No pude hacer nada',
 };
-
-export const DISABILITY_ORDER: Disability[] = [0, 1, 2, 3];
 
 // ─── Medicación ──────────────────────────────────────────────────────────────
 

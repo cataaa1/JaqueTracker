@@ -32,16 +32,16 @@ export function IntensityPicker({ value, onChange }: Props) {
               aria-pressed={selected}
               aria-label={`Intensidad ${intensity} de 10`}
               onClick={() => onChange(intensity)}
-              className="flex h-14 items-center justify-center rounded-chip"
+              className="flex h-[58px] items-center justify-center rounded-[16px] border-[3px]"
               style={{
                 background: `var(--intensity-${intensity})`,
                 color: `var(--intensity-${intensity}-on)`,
-                ...(selected
-                  ? { outline: '3px solid var(--text)', outlineOffset: '2px' }
-                  : {}),
+                // El borde está siempre, transparente cuando no está elegido:
+                // así el botón no cambia de tamaño al seleccionarlo.
+                borderColor: selected ? 'var(--text)' : 'transparent',
               }}
             >
-              <span className="text-[19px] font-semibold tabular-nums">{intensity}</span>
+              <span className="text-[22px] font-semibold tabular-nums">{intensity}</span>
             </button>
           );
         })}

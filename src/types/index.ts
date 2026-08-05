@@ -54,3 +54,51 @@ export interface Episode {
 
 /** Lo que hace falta para crear un episodio. El `id` lo pone la capa de datos. */
 export type NewEpisode = Omit<Episode, 'id'>;
+
+// ─── Medicación (fase 2) ─────────────────────────────────────────────────────
+
+export type MedicationUnit = 'mg' | 'g' | 'ml' | 'ui';
+
+/** `rescue` es lo que se toma cuando ya duele; `preventive`, lo de todos los
+ *  días. La distinción no es cosmética: define cómo se cuenta cada uno en el
+ *  reporte, y los días con rescate son el dato que más le importa al neurólogo. */
+export type MedicationKind = 'rescue' | 'preventive';
+
+/** Alivio a las 2 horas de una toma (RF-18). */
+export type ReliefLevel = 'none' | 'partial' | 'complete';
+
+export interface MedicationSchedule {
+  timesPerDay: number;
+  /** Horarios concretos. En la v1 queda siempre vacío: los recordatorios de
+   *  toma están fuera de alcance (PRD §9), así que una hora cargada no haría
+   *  nada. El campo existe porque lo define el modelo del PRD. */
+  times: string[];
+}
+
+export interface Medication {
+  id: string;
+  name: string;
+  dose: number;
+  unit: MedicationUnit;
+  kind: MedicationKind;
+  /** Desactivar en vez de borrar: un medicamento que se discontinuó tiene que
+   *  seguir explicando las tomas viejas del historial. */
+  isActive: boolean;
+  /** Solo para los preventivos; `null` en los analgésicos. */
+  schedule: MedicationSchedule | null;
+}
+
+export type NewMedication = Omit<Medication, 'id'>;
+
+export interface Intake {
+  id: string;
+  medicationId: string;
+  takenAt: string;
+  /** Vinculación opcional a un episodio: se puede tomar algo sin haber
+   *  registrado un episodio (RF-17). */
+  episodeId: string | null;
+  /** `null` = todavía no se respondió si alivió. */
+  relief2h: ReliefLevel | null;
+}
+
+export type NewIntake = Omit<Intake, 'id'>;

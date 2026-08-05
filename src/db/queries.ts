@@ -10,7 +10,15 @@
  */
 
 import { db } from './schema';
-import type { Episode, NewEpisode } from '../types';
+import type {
+  Episode,
+  Intake,
+  Medication,
+  NewEpisode,
+  NewIntake,
+  NewMedication,
+  ReliefLevel,
+} from '../types';
 
 /** Identificador único. `crypto.randomUUID` viene en el navegador: no hace falta
  *  ninguna librería y no sale nada a la red. */
@@ -63,5 +71,83 @@ export async function closeEpisode(id: string, endedAt: string): Promise<void> {
   const updated = await db.episodes.update(id, { endedAt });
   if (updated === 0) {
     throw new Error(`No se encontró el episodio ${id} para cerrarlo.`);
+  }
+}
+
+// ─── Medicamentos (RF-16) ────────────────────────────────────────────────────
+
+/** Todo el catálogo, activos e inactivos, ordenado por nombre. */
+export async function listMedications(): Promise<Medication[]> {
+  return db.medications.orderBy('name').toArray();
+}
+
+/** Solo los que siguen en uso. Se filtra en memoria porque IndexedDB no acepta
+ *  booleanos como índice. */
+export async function listActiveMedications(): Promise<Medication[]> {
+  const all = await db.medications.orderBy('name').toArray();
+  return all.filter((medication) => medication.isActive);
+}
+
+export async function getMedication(id: string): Promise<Medication | undefined> {
+  return db.medications.get(id);
+}
+
+export async function createMedication(medication: NewMedication): Promise<string> {
+  const id = newId();
+  await db.medications.add({ ...medication, id });
+  return id;
+}
+
+export async function updateMedication(
+  id: string,
+  changes: Partial<NewMedication>,
+): Promise<void> {
+  const updated = await db.medications.update(id, changes);
+  if (updated === 0) {
+    throw new Error(`No se encontró el medicamento ${id} para modificarlo.`);
+  }
+}
+
+/**
+ * Da de baja (o vuelve a dar de alta) un medicamento.
+ *
+ * Nunca se borra: las tomas viejas apuntan a él y sin el medicamento el
+ * historial quedaría con filas huérfanas que ya nadie puede interpretar.
+ */
+export async function setMedicationActive(id: string, isActive: boolean): Promise<void> {
+  const updated = await db.medications.update(id, { isActive });
+  if (updated === 0) {
+    throw new Error(`No se encontró el medicamento ${id}.`);
+  }
+}
+
+// ─── Tomas de rescate (RF-17, RF-18) ─────────────────────────────────────────
+
+/** Registra una toma (RF-17). */
+export async function createIntake(intake: NewIntake): Promise<string> {
+  const id = newId();
+  await db.intakes.add({ ...intake, id });
+  return id;
+}
+
+/** Tomas dentro de un rango, de la más nueva a la más vieja. */
+export async function listIntakesTakenBetween(
+  fromIso: string,
+  toIso: string,
+): Promise<Intake[]> {
+  const rows = await db.intakes.where('takenAt').between(fromIso, toIso, true, true).toArray();
+  return rows.sort((a, b) => b.takenAt.localeCompare(a.takenAt));
+}
+
+/** Las tomas vinculadas a un episodio. */
+export async function listIntakesForEpisode(episodeId: string): Promise<Intake[]> {
+  return db.intakes.where('episodeId').equals(episodeId).toArray();
+}
+
+/** Responde cuánto alivió una toma, dos horas después (RF-18). */
+export async function setIntakeRelief(id: string, relief2h: ReliefLevel): Promise<void> {
+  const updated = await db.intakes.update(id, { relief2h });
+  if (updated === 0) {
+    throw new Error(`No se encontró la toma ${id}.`);
   }
 }

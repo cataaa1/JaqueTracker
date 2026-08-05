@@ -10,6 +10,9 @@ import type {
   Disability,
   EpisodeLocation,
   EpisodeType,
+  MedicationKind,
+  MedicationUnit,
+  ReliefLevel,
   Symptom,
 } from '../types';
 
@@ -75,3 +78,34 @@ export const DISABILITY_LABELS: Record<Disability, string> = {
 };
 
 export const DISABILITY_ORDER: Disability[] = [0, 1, 2, 3];
+
+// ─── Medicación ──────────────────────────────────────────────────────────────
+
+/** "UI" son unidades internacionales; las demás se escriben como se leen. */
+export const UNIT_LABELS: Record<MedicationUnit, string> = {
+  mg: 'mg',
+  g: 'g',
+  ml: 'ml',
+  ui: 'UI',
+};
+
+export const UNIT_ORDER: MedicationUnit[] = ['mg', 'g', 'ml', 'ui'];
+
+/** En la interfaz se dice "analgésico" y no "rescate": es la palabra que usa
+ *  cualquiera. En el código el valor sigue siendo `rescue`, como el PRD. */
+export const MEDICATION_KIND_LABELS: Record<MedicationKind, string> = {
+  rescue: 'Analgésico',
+  preventive: 'Preventivo',
+};
+
+export const MEDICATION_KIND_ORDER: MedicationKind[] = ['rescue', 'preventive'];
+
+/** RF-18 los define como ninguno / parcial / completo. Acá se escriben como se
+ *  contesta la pregunta "¿te alivió?". */
+export const RELIEF_LABELS: Record<ReliefLevel, string> = {
+  none: 'Nada',
+  partial: 'Un poco',
+  complete: 'Del todo',
+};
+
+export const RELIEF_ORDER: ReliefLevel[] = ['none', 'partial', 'complete'];

@@ -12,30 +12,39 @@
  *     el estado de primer uso de la maqueta.
  *
  * Lo que sí manda el PRD y está: RF-01 (registrar con un toque, botón siempre
- * visible sin scroll) y RF-08 (cerrar un episodio en curso).
+ * visible sin scroll), RF-08 (cerrar un episodio en curso), RF-17 (registrar
+ * una toma) y RF-18 (responder el alivio a las 2 horas).
  */
 
 import { useCallback, useState } from 'react';
-import { endOfMonth, startOfMonth, subMonths } from 'date-fns';
-import type { Episode } from '../types';
+import { endOfMonth, startOfMonth, subDays, subMonths } from 'date-fns';
+import type { Episode, Intake, Medication, ReliefLevel } from '../types';
 import {
   closeEpisode,
   countEpisodes,
+  listActiveMedications,
   listEpisodesStartedBetween,
+  listIntakesTakenBetween,
   listOngoingEpisodes,
   listRecentEpisodes,
+  setIntakeRelief,
 } from '../db/queries';
 import { countHeadacheDaysInMonth, findOngoingEpisode } from '../lib/episodes';
-import { formatElapsedSince, formatMonthName, formatTime, formatTodayHeader, nowIso } from '../lib/dates';
+import { findIntakesAwaitingRelief, intakesOnDay } from '../lib/medications';
+import { formatMonthName, formatTodayHeader, nowIso } from '../lib/dates';
 import { useDbData } from '../hooks/useDbData';
 import { EpisodeRow } from '../components/EpisodeRow';
-import { IntensityBadge } from '../components/IntensityBadge';
+import { MedicationCard } from '../components/MedicationCard';
+import { OngoingEpisodeCard } from '../components/OngoingEpisodeCard';
 
 interface HomeData {
   recent: Episode[];
   headacheDays: number;
   totalEpisodes: number;
   ongoing: Episode | null;
+  medications: Medication[];
+  todayIntakes: Intake[];
+  awaitingRelief: Intake[];
 }
 
 async function loadHomeData(): Promise<HomeData> {
@@ -46,44 +55,58 @@ async function loadHomeData(): Promise<HomeData> {
   const from = startOfMonth(subMonths(now, 1)).toISOString();
   const to = endOfMonth(now).toISOString();
 
-  const [recent, monthWindow, totalEpisodes, ongoingList] = await Promise.all([
-    listRecentEpisodes(3),
-    listEpisodesStartedBetween(from, to),
-    countEpisodes(),
-    listOngoingEpisodes(),
-  ]);
+  // Tres días alcanzan para las tomas de hoy y para las que todavía esperan
+  // respuesta de alivio, que se dejan de preguntar a las 48 horas.
+  const intakesFrom = subDays(now, 3).toISOString();
+
+  const [recent, monthWindow, totalEpisodes, ongoingList, medications, intakes] =
+    await Promise.all([
+      listRecentEpisodes(3),
+      listEpisodesStartedBetween(from, to),
+      countEpisodes(),
+      listOngoingEpisodes(),
+      listActiveMedications(),
+      listIntakesTakenBetween(intakesFrom, now.toISOString()),
+    ]);
 
   return {
     recent,
     headacheDays: countHeadacheDaysInMonth(monthWindow, now, now),
     totalEpisodes,
     ongoing: findOngoingEpisode(ongoingList),
+    medications,
+    todayIntakes: intakesOnDay(intakes, now),
+    awaitingRelief: findIntakesAwaitingRelief(intakes, now),
   };
 }
 
 interface Props {
   onRegisterEpisode: () => void;
+  onRegisterIntake: (episodeId: string | null) => void;
+  onAddMedication: () => void;
 }
 
-export function Home({ onRegisterEpisode }: Props) {
+export function Home({ onRegisterEpisode, onRegisterIntake, onAddMedication }: Props) {
   const load = useCallback(loadHomeData, []);
   const { state, reload } = useDbData(load);
-  const [closingError, setClosingError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
-  async function handleCloseEpisode(id: string) {
-    setClosingError(null);
+  async function runAction(action: () => Promise<void>, fallback: string) {
+    setActionError(null);
     try {
-      await closeEpisode(id, nowIso());
+      await action();
       reload();
-    } catch (error: unknown) {
-      setClosingError(
-        error instanceof Error ? error.message : 'No se pudo cerrar el episodio.',
-      );
+    } catch (caught: unknown) {
+      setActionError(caught instanceof Error ? caught.message : fallback);
     }
   }
 
   const now = new Date();
   const hasData = state.status === 'ready' && state.data.totalEpisodes > 0;
+  const hasMedications = state.status === 'ready' && state.data.medications.length > 0;
+  const hasRescue =
+    state.status === 'ready' &&
+    state.data.medications.some((medication) => medication.kind === 'rescue');
 
   return (
     <div className="flex h-full flex-col">
@@ -100,20 +123,29 @@ export function Home({ onRegisterEpisode }: Props) {
 
         {state.status === 'error' && (
           <p className="rounded-card border border-danger bg-surface p-[18px] text-body text-danger">
-            No se pudieron leer los episodios: {state.message}
+            No se pudieron leer los datos: {state.message}
           </p>
         )}
 
-        {closingError !== null && (
+        {actionError !== null && (
           <p className="rounded-card border border-danger bg-surface p-[18px] text-body text-danger">
-            {closingError}
+            {actionError}
           </p>
         )}
 
         {state.status === 'ready' && state.data.ongoing !== null && (
           <OngoingEpisodeCard
             episode={state.data.ongoing}
-            onClose={() => void handleCloseEpisode(state.data.ongoing?.id ?? '')}
+            onClose={() => {
+              const id = state.data.ongoing?.id;
+              if (id !== undefined) {
+                void runAction(
+                  () => closeEpisode(id, nowIso()),
+                  'No se pudo cerrar el episodio.',
+                );
+              }
+            }}
+            onRegisterIntake={() => onRegisterIntake(state.data.ongoing?.id ?? null)}
           />
         )}
 
@@ -137,6 +169,25 @@ export function Home({ onRegisterEpisode }: Props) {
               hora y la intensidad; el resto es opcional.
             </p>
           </section>
+        )}
+
+        {/* La tarjeta de medicación aparece recién cuando hay algo que mostrar:
+            en el primer uso sería una caja vacía sin sentido. */}
+        {state.status === 'ready' && (hasMedications || state.data.todayIntakes.length > 0) && (
+          <MedicationCard
+            medications={state.data.medications}
+            todayIntakes={state.data.todayIntakes}
+            awaitingRelief={state.data.awaitingRelief}
+            hasRescueMedications={hasRescue}
+            onRegisterIntake={() => onRegisterIntake(state.data.ongoing?.id ?? null)}
+            onAddMedication={onAddMedication}
+            onAnswerRelief={(intakeId, relief: ReliefLevel) => {
+              void runAction(
+                () => setIntakeRelief(intakeId, relief),
+                'No se pudo guardar la respuesta.',
+              );
+            }}
+          />
         )}
 
         {state.status === 'ready' && state.data.recent.length > 0 && (
@@ -165,29 +216,5 @@ export function Home({ onRegisterEpisode }: Props) {
         </button>
       </div>
     </div>
-  );
-}
-
-/** Tarjeta del episodio abierto, con el botón para cerrarlo (RF-08). */
-function OngoingEpisodeCard({ episode, onClose }: { episode: Episode; onClose: () => void }) {
-  return (
-    <section className="flex flex-col gap-4 rounded-card-lg border border-border-strong bg-surface-2 p-[18px]">
-      <div className="flex items-center gap-3">
-        <IntensityBadge intensity={episode.intensity} />
-        <div className="flex flex-1 flex-col gap-px">
-          <h2 className="text-heading text-text">Episodio en curso</h2>
-          <span className="text-body text-text-2">
-            Empezó a las {formatTime(episode.startedAt)} · {formatElapsedSince(episode.startedAt)}
-          </span>
-        </div>
-      </div>
-      <button
-        type="button"
-        onClick={onClose}
-        className="flex h-[58px] items-center justify-center rounded-[17px] bg-accent"
-      >
-        <span className="text-heading text-on-accent">Ya me pasó</span>
-      </button>
-    </section>
   );
 }

@@ -17,6 +17,7 @@ import type {
   NewEpisode,
   NewIntake,
   NewMedication,
+  PreventiveLog,
   ReliefLevel,
 } from '../types';
 
@@ -72,6 +73,42 @@ export async function closeEpisode(id: string, endedAt: string): Promise<void> {
   if (updated === 0) {
     throw new Error(`No se encontró el episodio ${id} para cerrarlo.`);
   }
+}
+
+/** Un episodio por su id, para el detalle y la edición (RF-15). */
+export async function getEpisode(id: string): Promise<Episode | undefined> {
+  return db.episodes.get(id);
+}
+
+/** Modifica cualquier campo de un episodio ya guardado (RF-13). */
+export async function updateEpisode(
+  id: string,
+  changes: Partial<NewEpisode>,
+): Promise<void> {
+  const updated = await db.episodes.update(id, changes);
+  if (updated === 0) {
+    throw new Error(`No se encontró el episodio ${id} para modificarlo.`);
+  }
+}
+
+/**
+ * Borra un episodio y las tomas vinculadas a él (RF-14).
+ *
+ * El borrado es en cascada por decisión explícita del propietario del producto:
+ * la maqueta lo dice y la pantalla de confirmación lo avisa con todas las
+ * letras. Tiene una consecuencia que conviene tener presente: borrar un
+ * episodio también baja el conteo de días con analgésicos del mes, que es el
+ * número destacado del reporte.
+ *
+ * Va dentro de una transacción: o se borran las dos cosas o no se borra
+ * ninguna. Sin eso, un corte en el medio dejaría tomas apuntando a un episodio
+ * que ya no existe.
+ */
+export async function deleteEpisodeWithIntakes(id: string): Promise<void> {
+  await db.transaction('rw', db.episodes, db.intakes, async () => {
+    await db.intakes.where('episodeId').equals(id).delete();
+    await db.episodes.delete(id);
+  });
 }
 
 // ─── Medicamentos (RF-16) ────────────────────────────────────────────────────
@@ -150,4 +187,41 @@ export async function setIntakeRelief(id: string, relief2h: ReliefLevel): Promis
   if (updated === 0) {
     throw new Error(`No se encontró la toma ${id}.`);
   }
+}
+
+// ─── Adherencia al preventivo (RF-19, RF-20) ─────────────────────────────────
+
+/** Marcas de preventivo entre dos días, ambos incluidos. Las fechas son claves
+ *  de día local (`2026-08-05`), no instantes. */
+export async function listPreventiveLogsBetween(
+  fromDate: string,
+  toDate: string,
+): Promise<PreventiveLog[]> {
+  return db.preventiveLogs.where('date').between(fromDate, toDate, true, true).toArray();
+}
+
+/**
+ * Marca o desmarca la toma de un preventivo en un día (RF-19 y RF-20: sirve
+ * igual para hoy que para un día anterior).
+ *
+ * Si ya había un registro de ese medicamento ese día, lo actualiza; si no, lo
+ * crea. El índice único de la base garantiza que no puedan quedar dos.
+ */
+export async function setPreventiveTaken(
+  medicationId: string,
+  date: string,
+  taken: boolean,
+): Promise<void> {
+  await db.transaction('rw', db.preventiveLogs, async () => {
+    const existing = await db.preventiveLogs
+      .where('[medicationId+date]')
+      .equals([medicationId, date])
+      .first();
+
+    if (existing === undefined) {
+      await db.preventiveLogs.add({ id: newId(), medicationId, date, taken });
+    } else {
+      await db.preventiveLogs.update(existing.id, { taken });
+    }
+  });
 }

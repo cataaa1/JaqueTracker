@@ -102,3 +102,18 @@ export interface Intake {
 }
 
 export type NewIntake = Omit<Intake, 'id'>;
+
+// ─── Adherencia al preventivo (fase 3) ───────────────────────────────────────
+
+export interface PreventiveLog {
+  id: string;
+  medicationId: string;
+  /** Día del calendario local en formato `2026-08-05`, sin hora. Un preventivo
+   *  se toma "el martes", no "el martes a las 14:03": guardar la hora invitaría
+   *  a una precisión que el dato no tiene. Hay un registro por medicamento y
+   *  por día. */
+  date: string;
+  taken: boolean;
+}
+
+export type NewPreventiveLog = Omit<PreventiveLog, 'id'>;

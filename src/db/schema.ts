@@ -17,9 +17,10 @@
  * Historial de versiones:
  *   v1 (fase 1) — tabla `episodes`.
  *   v2 (fase 2) — se suman `medications` e `intakes`.
+ *   v3 (fase 3) — se suma `preventiveLogs`.
  *
- * Lo que viene: `preventiveLogs` en la fase 3 y `settings`. Cada una entra como
- * versión nueva, sin tocar las anteriores.
+ * Lo que viene: `settings` (nombre del paciente, tema) en las fases 6 y 7.
+ * Entra como versión nueva, sin tocar las anteriores.
  * ─────────────────────────────────────────────────────────────────────────────
  *
  * Sobre la cadena de índices ('id, startedAt'): el primer campo es la clave
@@ -34,12 +35,13 @@
 
 import Dexie from 'dexie';
 import type { EntityTable } from 'dexie';
-import type { Episode, Intake, Medication } from '../types';
+import type { Episode, Intake, Medication, PreventiveLog } from '../types';
 
 export const db = new Dexie('jaque-tracker') as Dexie & {
   episodes: EntityTable<Episode, 'id'>;
   medications: EntityTable<Medication, 'id'>;
   intakes: EntityTable<Intake, 'id'>;
+  preventiveLogs: EntityTable<PreventiveLog, 'id'>;
 };
 
 db.version(1).stores({
@@ -60,4 +62,15 @@ db.version(1).stores({
 db.version(2).stores({
   medications: 'id, kind, name',
   intakes: 'id, takenAt, medicationId, episodeId',
+});
+
+// v3 — fase 3. Tampoco necesita `.upgrade()`: la tabla nace vacía.
+//
+// `&[medicationId+date]` es un índice compuesto y único. Compuesto quiere decir
+// que se busca por los dos campos a la vez; único, que la base rechaza un
+// segundo registro del mismo medicamento el mismo día. Es la regla "un registro
+// por medicamento por día" del PRD, aplicada por la base y no por confianza en
+// que el código no se equivoque.
+db.version(3).stores({
+  preventiveLogs: 'id, date, medicationId, &[medicationId+date]',
 });

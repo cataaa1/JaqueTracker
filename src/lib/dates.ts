@@ -24,10 +24,10 @@ import {
   eachDayOfInterval,
   format,
   formatDistanceToNowStrict,
+  isSameDay,
   isSameYear,
-  isToday,
-  isYesterday,
   parseISO,
+  subDays,
 } from 'date-fns';
 import { es } from 'date-fns/locale';
 
@@ -88,19 +88,52 @@ export function isValidDateTimeLocalInput(value: string): boolean {
 
 // ─── Formato para pantalla ───────────────────────────────────────────────────
 
+function capitalize(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+/**
+ * "Hoy" y "ayer" respecto de un `now` que se pasa por parámetro.
+ *
+ * A propósito no se usan `isToday`/`isYesterday` de date-fns: esas comparan
+ * siempre contra el reloj del sistema e ignorarían el `now` recibido, lo que
+ * deja estas funciones imposibles de probar y el parámetro mintiendo.
+ */
+function isSameDayAs(date: Date, reference: Date): boolean {
+  return isSameDay(date, reference);
+}
+
 /** `Hoy, 14:20` · `Ayer, 14:20` · `1 de agosto, 8:05` · `1 de agosto de 2025, 8:05` */
 export function formatEpisodeStart(iso: string, now: Date = new Date()): string {
   const date = parseISO(iso);
   const time = format(date, 'H:mm', { locale: es });
 
-  if (isToday(date)) return `Hoy, ${time}`;
-  if (isYesterday(date)) return `Ayer, ${time}`;
+  if (isSameDayAs(date, now)) return `Hoy, ${time}`;
+  if (isSameDayAs(date, subDays(now, 1))) return `Ayer, ${time}`;
 
   const day = isSameYear(date, now)
     ? format(date, "d 'de' MMMM", { locale: es })
     : format(date, "d 'de' MMMM 'de' yyyy", { locale: es });
 
   return `${day}, ${time}`;
+}
+
+/** `Mié 5 · 14:20` — el formato corto de las filas de la maqueta. */
+export function formatEpisodeShort(iso: string): string {
+  const date = parseISO(iso);
+  return `${capitalize(format(date, 'EEE', { locale: es }))} ${date.getDate()} · ${format(date, 'H:mm', { locale: es })}`;
+}
+
+/** `martes 4 de agosto, 14:20` — el encabezado del detalle. */
+export function formatEpisodeLong(iso: string): string {
+  const date = parseISO(iso);
+  return format(date, "EEEE d 'de' MMMM, H:mm", { locale: es });
+}
+
+/** `Agosto 2026` — el encabezado de mes que separa el historial. */
+export function formatMonthAndYear(iso: string): string {
+  const date = parseISO(iso);
+  return `${capitalize(format(date, 'MMMM', { locale: es }))} ${date.getFullYear()}`;
 }
 
 /** `14:20` — solo la hora, para la tarjeta del episodio en curso. */
@@ -115,14 +148,23 @@ export function formatElapsedSince(iso: string): string {
 
 /** `Miércoles 4 de agosto`, con la primera letra en mayúscula. */
 export function formatTodayHeader(now: Date = new Date()): string {
-  const raw = format(now, "EEEE d 'de' MMMM", { locale: es });
-  return raw.charAt(0).toUpperCase() + raw.slice(1);
+  return capitalize(format(now, "EEEE d 'de' MMMM", { locale: es }));
 }
 
 /** `Agosto` — el encabezado de la tarjeta de resumen del mes. */
 export function formatMonthName(date: Date): string {
-  const raw = format(date, 'MMMM', { locale: es });
-  return raw.charAt(0).toUpperCase() + raw.slice(1);
+  return capitalize(format(date, 'MMMM', { locale: es }));
+}
+
+/** `Martes 4` — el encabezado de cada día en el marcado retroactivo. */
+export function formatDayHeader(date: Date, now: Date = new Date()): string {
+  if (isSameDayAs(date, now)) return 'Hoy';
+  if (isSameDayAs(date, subDays(now, 1))) return 'Ayer';
+  return capitalize(
+    isSameYear(date, now)
+      ? format(date, "EEEE d 'de' MMMM", { locale: es })
+      : format(date, "EEEE d 'de' MMMM 'de' yyyy", { locale: es }),
+  );
 }
 
 /** Duración legible de un episodio ya cerrado: `2 h 15 min` · `40 min`. */

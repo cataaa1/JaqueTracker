@@ -45,3 +45,32 @@ export function countHeadacheDaysInMonth(
 
   return days.size;
 }
+
+/**
+ * Cuántos episodios empezaron dentro del mes.
+ *
+ * No es lo mismo que los días con cefalea y por eso se muestran los dos: tres
+ * episodios el mismo día son tres episodios pero un solo día. La métrica
+ * clínica es la de días; el conteo de episodios está para que el número de
+ * días no parezca un error.
+ */
+export function countEpisodesInMonth(
+  episodes: Episode[],
+  reference: Date = new Date(),
+): number {
+  const firstDay = localDayKey(startOfMonth(reference));
+  const lastDay = localDayKey(endOfMonth(reference));
+
+  return episodes.filter((episode) => {
+    const day = localDayKey(new Date(episode.startedAt));
+    return day >= firstDay && day <= lastDay;
+  }).length;
+}
+
+/** Los episodios de un día del calendario local, del más intenso al menos. */
+export function episodesStartedOnDay(episodes: Episode[], day: Date): Episode[] {
+  const key = localDayKey(day);
+  return episodes
+    .filter((episode) => localDayKey(new Date(episode.startedAt)) === key)
+    .sort((a, b) => b.intensity - a.intensity);
+}

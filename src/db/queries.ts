@@ -9,7 +9,9 @@
  * promesa se rechaza y la pantalla se entera (CLAUDE.md §5).
  */
 
+import type { EntityTable } from 'dexie';
 import { db } from './schema';
+import type { BackupData } from '../lib/backup';
 import type {
   Episode,
   Intake,
@@ -185,6 +187,126 @@ export async function setIntakeRelief(id: string, relief2h: ReliefLevel): Promis
   if (updated === 0) {
     throw new Error(`No se encontró la toma ${id}.`);
   }
+}
+
+// ─── Respaldo (RF-24, RF-25) ─────────────────────────────────────────────────
+
+/** Todo lo que hay en la base, para exportar (RF-24). */
+export async function exportEverything(): Promise<BackupData> {
+  const [episodes, medications, intakes, preventiveLogs] = await Promise.all([
+    listAllEpisodes(),
+    listMedications(),
+    listAllIntakes(),
+    listAllPreventiveLogs(),
+  ]);
+  return { episodes, medications, intakes, preventiveLogs };
+}
+
+export interface ImportResult {
+  episodes: number;
+  medications: number;
+  intakes: number;
+  preventiveLogs: number;
+  skipped: number;
+}
+
+/**
+ * REEMPLAZAR: borra todo lo que hay y deja el contenido del respaldo (RF-25).
+ *
+ * Es la operación más destructiva de la app. La pantalla la confirma dos veces
+ * antes de llamarla (regla 4 de CLAUDE.md y RNF-05).
+ *
+ * Todo pasa dentro de una transacción: si algo falla en el medio, la base queda
+ * como estaba. Sin eso, un error después del borrado dejaría al usuario sin
+ * datos viejos y sin datos nuevos.
+ */
+export async function replaceEverything(data: BackupData): Promise<ImportResult> {
+  return db.transaction(
+    'rw',
+    [db.episodes, db.medications, db.intakes, db.preventiveLogs],
+    async () => {
+      await Promise.all([
+        db.episodes.clear(),
+        db.medications.clear(),
+        db.intakes.clear(),
+        db.preventiveLogs.clear(),
+      ]);
+
+      await db.episodes.bulkAdd(data.episodes);
+      await db.medications.bulkAdd(data.medications);
+      await db.intakes.bulkAdd(data.intakes);
+      await db.preventiveLogs.bulkAdd(data.preventiveLogs);
+
+      return {
+        episodes: data.episodes.length,
+        medications: data.medications.length,
+        intakes: data.intakes.length,
+        preventiveLogs: data.preventiveLogs.length,
+        skipped: 0,
+      };
+    },
+  );
+}
+
+/**
+ * FUSIONAR: suma lo que falta y no pisa nada de lo que ya está (RF-25).
+ *
+ * Un registro se considera repetido si ya existe su `id`. Las marcas de
+ * preventivo llevan además un control extra: la base tiene un índice único por
+ * medicamento y día, así que dos marcas con distinto `id` pero mismo día
+ * romperían la importación. Esas se saltean.
+ */
+export async function mergeEverything(data: BackupData): Promise<ImportResult> {
+  return db.transaction(
+    'rw',
+    [db.episodes, db.medications, db.intakes, db.preventiveLogs],
+    async () => {
+      let skipped = 0;
+
+      async function addMissing<T extends { id: string }>(
+        table: EntityTable<T, 'id'>,
+        rows: T[],
+      ): Promise<number> {
+        // Las claves primarias vienen tipadas por Dexie de forma genérica; acá
+        // sabemos que son los `id` de texto que declara el esquema.
+        const keys = (await table.toCollection().primaryKeys()) as string[];
+        const existing = new Set(keys);
+        const missing = rows.filter((row) => !existing.has(row.id));
+        skipped += rows.length - missing.length;
+        if (missing.length > 0) await table.bulkAdd(missing);
+        return missing.length;
+      }
+
+      const episodes = await addMissing(db.episodes, data.episodes);
+      const medications = await addMissing(db.medications, data.medications);
+      const intakes = await addMissing(db.intakes, data.intakes);
+
+      // Las marcas de preventivo se filtran también por (medicamento + día),
+      // que es único en la base.
+      const takenSlots = new Set(
+        (await db.preventiveLogs.toArray()).map((log) => `${log.medicationId}|${log.date}`),
+      );
+      const existingLogIds = new Set(await db.preventiveLogs.toCollection().primaryKeys());
+
+      const logsToAdd = data.preventiveLogs.filter((log) => {
+        const slot = `${log.medicationId}|${log.date}`;
+        if (existingLogIds.has(log.id) || takenSlots.has(slot)) return false;
+        takenSlots.add(slot);
+        return true;
+      });
+
+      skipped += data.preventiveLogs.length - logsToAdd.length;
+      if (logsToAdd.length > 0) await db.preventiveLogs.bulkAdd(logsToAdd);
+
+      return {
+        episodes,
+        medications,
+        intakes,
+        preventiveLogs: logsToAdd.length,
+        skipped,
+      };
+    },
+  );
 }
 
 // ─── Adherencia al preventivo (RF-19, RF-20) ─────────────────────────────────

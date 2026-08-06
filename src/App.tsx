@@ -165,6 +165,7 @@ export function App() {
             onAddMedication={() => setView({ kind: 'medication-form', medicationId: null })}
             onSelectEpisode={(episodeId) => openEpisode(episodeId, 'home')}
             onOpenPreventiveHistory={() => setView({ kind: 'preventive-history' })}
+            onOpenBackup={() => setTab('settings')}
           />
         )}
         {tab === 'history' && (

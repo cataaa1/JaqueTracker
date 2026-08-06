@@ -41,6 +41,7 @@ import {
   isPreventiveTaken,
   rescueDaysWarning,
 } from '../lib/medications';
+import { daysSinceLastBackup, shouldRemindBackup } from '../lib/backup';
 import { formatMonthName, formatTodayHeader, localDayKey } from '../lib/dates';
 import { useDbData } from '../hooks/useDbData';
 import { EpisodeRow } from '../components/EpisodeRow';
@@ -117,6 +118,7 @@ interface Props {
   onAddMedication: () => void;
   onSelectEpisode: (episodeId: string) => void;
   onOpenPreventiveHistory: () => void;
+  onOpenBackup: () => void;
 }
 
 export function Home({
@@ -125,6 +127,7 @@ export function Home({
   onAddMedication,
   onSelectEpisode,
   onOpenPreventiveHistory,
+  onOpenBackup,
 }: Props) {
   const load = useCallback(loadHomeData, []);
   const { state, reload } = useDbData(load);
@@ -167,6 +170,8 @@ export function Home({
   // Inicio deja de ofrecer atajos para darlos de alta.
   const hasAnyMedication = data.medications.length > 0;
 
+  const backupDays = daysSinceLastBackup();
+
   return (
     <div className="flex h-full flex-col">
       <div
@@ -182,6 +187,34 @@ export function Home({
           <p className="rounded-card border border-danger bg-surface p-[18px] text-body text-danger">
             {actionError}
           </p>
+        )}
+
+        {/* RF-26: si pasaron más de 30 días desde la última copia, se avisa.
+            No bloquea nada y se llega a Ajustes de un toque. */}
+        {shouldRemindBackup(hasEpisodes) && (
+          <button
+            type="button"
+            onClick={onOpenBackup}
+            className="flex items-start gap-3 rounded-row border border-dashed border-border-strong bg-surface-2 p-4 text-left"
+          >
+            <svg
+              width="22"
+              height="22"
+              viewBox="0 0 22 22"
+              fill="none"
+              aria-hidden="true"
+              className="mt-px flex-none"
+            >
+              <circle cx="11" cy="11" r="8.6" stroke="var(--text-2)" strokeWidth="1.7" />
+              <path d="M11 6.6V11l3 2" stroke="var(--text-2)" strokeWidth="1.8" strokeLinecap="round" />
+            </svg>
+            <span className="flex-1 text-body text-text" style={{ textWrap: 'pretty' }}>
+              {backupDays === null
+                ? 'Todavía no guardaste una copia de tus datos. Viven solo en este teléfono.'
+                : `Hace ${backupDays} días que no guardás una copia. Tus datos viven solo en este teléfono.`}
+            </span>
+            <span className="mt-px text-body font-semibold text-accent">Guardar</span>
+          </button>
         )}
 
         {quickEpisode !== null && (
